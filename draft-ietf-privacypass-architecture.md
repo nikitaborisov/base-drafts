@@ -215,91 +215,83 @@ cannot be linked to the content of the Token Request or Token Response.
 
 ## Privacy Goals and Threat Model {#privacy-and-trust}
 
-The end-to-end flow for Privacy Pass described in {{overview}} involves three
-different types of contexts:
+The overarching privacy goal of Privacy Pass is to deliver the benefits of the
+attestation to client properties while avoid facilitating the tracking of
+clients' activities by servers. 
 
-Redemption context:
-: The interactions and set of information shared
-between the Client and Origin, i.e., the information that is provided or
-otherwise available to the Origin during redemption that might be used
-to identify a Client and construct a token challenge. This context includes all
-information associated with redemption, such as the timestamp of the event,
-Client visible information (including the IP address), and the Origin name.
+In particular, the Origin should be unable to infer the identity of the clients
+from the challenge and redemption interactions. Furthermore, many tracking
+technologies make use of linking client activity across time and across origins,
+so Privacy Pass must not enable such linking even when explicit Client identiy
+is not revealed. More precisely, we define Unlinkability of Redemptions to mean
+that, given two token redemptions, with potentially, but not necessarily,
+distinct Origins, the Origin(s) cannot distinguish whether the redemptions were
+made by the same Client or two different Clients. 
 
-Issuance context:
-: The interactions and set of information shared between the Client, Attester,
-and Issuer, i.e., the information that is provided or otherwise available
-to Attester and Issuer during issuance that might be used to identify a Client.
-This context includes all information associated with issuance, such as the
-timestamp of the event, any Client visible information (including the IP
-address), and the Origin name (if revealed during issuance). This does not
-include the token challenge in its entirety, as that is kept secret from the
-Issuer during the issuance protocol.
+We note that Unlinkability of Redemptions refers only to the information that
+can be gleaned directly from the Privacy Pass protocol. The Origin may be able
+to track client identities by using other means, including Client IP addresses,
+HTTP cookies, client fingerprinting, and so on. Privacy Pass cannot prevent such
+tracking, but by providing Unlinkability of Redemptions, it can work in concert
+with other anti-tracking technologies.
 
-Attestation context:
-: The interactions and set of information shared between
-the Client and Attester only, for the purposes of attesting the vailidity of
-the Client, that is provided or otherwise available during attestation that
-might be used to identify the Client. This context includes all information
-associated with attestation, such as the timestamp of the event and any Client
-visible information, including information needed for the attestation
-procedure to complete.
+Another important privacy property is that the redemption of tokens should be
+unlinkable to their issuance. During the attestation and issuance flows, the
+Attester and/or the Issuer may learn some information about the Client, either
+by the Client directly revealing its identity to the Attester as part of, e.g.,
+device attestation, or indirectly by observing Client attributes such as IP
+address, choice of Attester, etc. It is important that this information not be
+usable for tracking Client accesses to the Origin. We define Token Unlinkability
+to mean that the token redemption phase of the protocol is unlinkable to the
+attestation and issuance phases. More precisely, given two instances of an
+attestation and issuance protocol, followed by the redemption of one of the
+tokens, an adversary should not be able to learn which of the tokens was
+redeemed, despite seeing all server-side information at the Origin, Issuer, and
+Attester.
 
-The privacy goals of Privacy Pass assume a threat model in which Origins trust
-specific Issuers to produce tokens, and Issuers in turn trust one or more
-Attesters to correctly run the attestation procedure with Clients. This
-arrangement ensures that tokens which validate for a given Issuer were only
-issued to a Client that successfully completed attestation with an Attester
-that the Issuer trusts. Moreover, this arrangement means that if an Origin
-accepts tokens issued by an Issuer that trusts multiple Attesters, then a
-Client can use any one of these Attesters to issue and redeem tokens for the
-Origin.
+Just as with Unlinkability of Redemptions, Token Unlinkability refers to
+information that is gleaned from the Privacy Pass protocol. In practice, an
+Issuer and Origin could link the issuance and redemption of a token by
+observing, e.g., that both are using the same Client IP address, among other
+factors. Moreover, Token Unlinkability only holds among tokens that are issued
+under the same Issuer key and using the same public metadata. Tokens issued
+using different Issuer keys or different public metadata partition clients into
+different issuance anonymity sets; see {{privacy}} for a discussion of such
+partitioning.
+
+Some versions Privacy Pass issuance and attestation will require revealing
+information about the Client or the Origin to the Issuer and/or Attester. In
+this case, it is important that no single party learn both. We define
+Client-Origin Secrecy to mean that no party learns both the Client and Origin
+identity. If two colluding parties could together learn both the Client and
+Origin identities withing a single flow, their non-collusion must be an explicit
+deployment requirement.
+
+A stronger property, Client-Origin Unlinkability, means that no party is able to
+learn when the same Client is accessing the same Origin during two Attestation
+and/or Issuance flows. While this is a desirable property, some versions of
+Privacy Pass (namely RLPP) violate this property in order to provide a certain
+level of functionality.. 
+
+Privacy Pass assumes a threat model in which Origins trust specific Issuers to
+produce tokens, and Issuers in turn trust one or more Attesters to correctly run
+the attestation procedure with Clients. This arrangement ensures that tokens
+which validate for a given Issuer were only issued to a Client that successfully
+completed attestation with an Attester that the Issuer trusts. Moreover, this
+arrangement means that if an Origin accepts tokens issued by an Issuer that
+trusts multiple Attesters, then a Client can use any one of these Attesters to
+issue and redeem tokens for the Origin.
 
 The mechanisms for establishing trust between each entity in this arrangement
 are deployment specific. For example, in settings where Clients interact with
-Issuers through an Attester, Attesters and Issuers might use
-mutually authenticated TLS to authenticate one another. In settings where
-Clients do not communicate with Issuers through an Attester, the Attesters
-might convey this trust via a digital signature over that Issuers can verify.
+Issuers through an Attester, Attesters and Issuers might use mutually
+authenticated TLS to authenticate one another. In settings where Clients do not
+communicate with Issuers through an Attester, the Attesters might convey this
+trust via a digital signature over that Issuers can verify.
 
-Clients explicitly trust Attesters to perform attestation correctly and in a
-way that does not violate their privacy. However, Clients assume Issuers and
-Origins are malicious.
-
-Given this threat model, the privacy goals of Privacy Pass are oriented around
-unlinkability based on redemption, issuance, and attestation contexts, as
-described below.
-
-1. Origin-Client unlinkability. This means that given two redemption contexts,
-the Origin cannot determine if both redemption contexts correspond to the same
-Client or two different Clients. Informally, this means that a Client in a
-redemption context is indistinguishable from any other Client that might use
-the same redemption context. The set of Clients that share the same redemption
-context is referred to as a redemption anonymity set.
-2. Issuer-Client unlinkability. This is similar to Origin-Client unlinkability
-in that a Client in an issuance context is indistinguishable from any other
-Client that might use the same issuance context. The set of Clients that share
-the same issuance context is referred to as an issuance anonymity set.
-3. Attester-Origin unlinkability. This is similar to Origin-Client and
-Issuer-Client unlinkability. It means that given two attestation contexts,
-the Attester cannot determine if both contexts correspond to the same Origin
-or two different Origins. The set of Clients that share the same attestation
-context is referred to as an attestation anonymity set.
-
-By ensuring that different contexts cannot be linked in this way, only the
-Client is able to correlate information that might be used to identify them with
-activity on the Origin.  The Attester, Issuer, and Origin only receive the
-information necessary to perform their respective functions.
-
-The manner in which Origin-Client, Issuer-Client, and Attester-Origin
-unlinkability are achieved depends on the deployment model, type of
-attestation, and issuance protocol details. For example, as discussed in
-{{deployment}}, failure to use a privacy-enhancing proxy system such as Tor
-{{DMS2004}} when interacting with Attesters, Issuers, or Origins allows
-the set of possible Clients to be partitioned by the Client's IP address, and
-can therefore lead to unlinkability violations. Similarly, malicious Origins
-may attempt to link two redemption contexts together by using Client-specific
-Issuer public keys. See {{deployment}} and {{privacy}} for more information.
+The Clients rely on Attesters and Issuers to help authenticate the Clients'
+properties to the Origins. However, the parties are assumed to be arbitrarily
+malicious. 
 
 The remainder of this section describes the functional properties and security
 requirements of the redemption and issuance protocols in more detail. {{flow}}
